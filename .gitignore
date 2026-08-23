@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+.env
+*.key
+.runpod-key*
+.elevenlabs-key*
+outputs/
+*.mp4
+*.wav
+*.mp3

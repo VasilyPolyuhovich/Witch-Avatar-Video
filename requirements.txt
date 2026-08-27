@@ -1,0 +1,6 @@
+# Local tooling dependency only -- NOT used inside docker/sadtalker (that
+# image pins its own SadTalker-side torch 1.12.1/CUDA 11.3 independently,
+# see docker/sadtalker/Dockerfile). chatterbox-tts pulls in torch itself
+# (version resolved per-Python-version by chatterbox-tts's own dependency
+# metadata -- no separate torch pin needed here).
+chatterbox-tts

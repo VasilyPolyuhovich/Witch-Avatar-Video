@@ -10,3 +10,4 @@ outputs/
 *.mp4
 *.wav
 *.mp3
+!assets/*.wav

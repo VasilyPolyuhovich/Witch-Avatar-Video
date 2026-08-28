@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """GPU deploy/rank/retry/terminate primitives for Witch-Avatar-Video's
-on-demand SadTalker pods -- adapted from AI-Avatar-Video's scripts/pod_up.py
+on-demand render pods -- adapted from AI-Avatar-Video's scripts/pod_up.py
 (see docs/2026-08-13-witch-avatar-video-design.md for why this project
-reuses that project's operational patterns). Deliberately simpler than the
-original: no network volume (SadTalker's baked-in checkpoints are under 1GB,
-small enough to live in the Docker image itself -- see docker/sadtalker/
-Dockerfile), no A100/H100-only GPU_MATCH (SadTalker has no flash-attn-style
-architecture lock-in), no foreign-pod detection (single-user tool, not a
-shared account).
+reuses that project's operational patterns). Originally deliberately
+simpler than the original: no network volume (SadTalker's baked-in
+checkpoints were under 1GB, small enough to live in the Docker image
+itself), no A100/H100-only GPU_MATCH (no flash-attn-style architecture
+lock-in), no foreign-pod detection (single-user tool, not a shared
+account). Network volume support was reintroduced 2026-08-28 when the
+backend switched to MuseTalk, whose ~4.1GB of weights don't fit that
+"bake into the image" rationale -- see
+docs/superpowers/specs/2026-08-28-musetalk-migration-design.md. The
+GPU_MATCH/foreign-pod-detection simplifications still hold.
 
 Usage:
     python3 scripts/pod_up.py                # deploy, print SSH command
@@ -19,10 +23,12 @@ Env knobs: IMAGE, MIN_VRAM (default 16), MAX_PRICE (default 0.60), GPU_MATCH
     below), ACCOUNT_KEY_FILE, SSH_PUBKEY_FILE, START_TIMEOUT (default 600s),
     MAX_TRIES_PER_GPU (default 2), NETWORK_VOLUME_ID (unset by default --
     required for MuseTalk's model weights, see
-    docs/superpowers/specs/2026-08-28-musetalk-migration-design.md),
-    DATA_CENTER_ID (unset by default -- network volumes are datacenter-
-    locked; required alongside NETWORK_VOLUME_ID, pins GPU search to that
-    one datacenter and reintroduces SUPPLY_CONSTRAINT risk).
+    docs/superpowers/specs/2026-08-28-musetalk-migration-design.md; the
+    matching datacenter is looked up automatically via the RunPod API,
+    see network_volume_dc() -- no separate DATA_CENTER_ID env var, so the
+    two can never drift out of sync. Network volumes are datacenter-
+    locked, so setting this pins GPU search to that one datacenter and
+    reintroduces SUPPLY_CONSTRAINT risk).
 """
 import json
 import os
@@ -48,7 +54,6 @@ DEFAULT_VOLUME_GB = 10  # small pod volume, unused for anything but required by 
 # docker/sadtalker/ is kept as a non-wired-in fallback, not the active path.
 DEFAULT_IMAGE_REF = "ghcr.io/vasilypolyuhovich/witch-avatar-musetalk:latest"
 DEFAULT_NETWORK_VOLUME_ID = None
-DEFAULT_DATA_CENTER_ID = None
 DEFAULT_SSH_PUBKEY_FILE = "~/.runpod/ssh/runpodctl-witch-video-ssh-key.pub"
 DEFAULT_SSH_PRIVKEY_FILE = "~/.runpod/ssh/runpodctl-witch-video-ssh-key"
 DEFAULT_ACCOUNT_KEY_FILE = "~/.runpod-key-witch-video"
@@ -129,6 +134,20 @@ def build_env_list(public_key):
     return [{"key": "PUBLIC_KEY", "value": public_key}] if public_key else []
 
 
+def network_volume_dc(account_key, vol_id):
+    """The datacenter a network volume lives in -- required alongside
+    networkVolumeId in deploy() since volumes are datacenter-locked.
+    Looked up via the API rather than taken as a separate env var so the
+    two can never drift out of sync (ported from the runpod-pod-ops
+    skill's reference pod_up.py, which uses this exact pattern)."""
+    data = gql(account_key, "query{myself{networkVolumes{id dataCenterId}}}")
+    vols = ((data.get("data") or {}).get("myself") or {}).get("networkVolumes") or []
+    for v in vols:
+        if v["id"] == vol_id:
+            return v["dataCenterId"]
+    sys.exit(f"ERROR: network volume {vol_id} not found on this account")
+
+
 def deploy(account_key, gpu_id, cfg, public_key):
     inp = {
         "cloudType": "SECURE",
@@ -137,7 +156,6 @@ def deploy(account_key, gpu_id, cfg, public_key):
         "name": cfg["pod_name"],
         "imageName": cfg["image"],
         "containerDiskInGb": cfg["container_disk"],
-        "volumeInGb": cfg["volume_gb"],
         "volumeMountPath": "/workspace",
         "ports": cfg["ports"],
         "env": build_env_list(public_key),
@@ -150,11 +168,15 @@ def deploy(account_key, gpu_id, cfg, public_key):
     # Network volumes are datacenter-locked, so dataCenterId is set
     # alongside it -- this pins GPU search to one datacenter, reintroducing
     # SUPPLY_CONSTRAINT risk the rest of this module's unrestricted
-    # GPU_MATCH design otherwise avoids.
-    if cfg.get("network_volume_id"):
+    # GPU_MATCH design otherwise avoids. volumeInGb (an ephemeral pod
+    # volume) is only requested when there's NO network volume -- the two
+    # are alternatives, not additive (matches the runpod-pod-ops skill's
+    # reference pod_up.py).
+    if cfg["network_volume_id"]:
         inp["networkVolumeId"] = cfg["network_volume_id"]
-        if cfg.get("data_center_id"):
-            inp["dataCenterId"] = cfg["data_center_id"]
+        inp["dataCenterId"] = cfg["data_center_id"]
+    else:
+        inp["volumeInGb"] = cfg["volume_gb"]
     mut = ("mutation($input:PodFindAndDeployOnDemandInput!){"
            "podFindAndDeployOnDemand(input:$input){id imageName machineId}}")
     return gql(account_key, mut, {"input": inp})
@@ -292,8 +314,12 @@ def main():
         # docs/superpowers/plans/2026-08-23-witch-avatar-video-implementation.md.
         "registry_auth_id": env("REGISTRY_AUTH_ID"),
         "network_volume_id": env("NETWORK_VOLUME_ID", DEFAULT_NETWORK_VOLUME_ID),
-        "data_center_id": env("DATA_CENTER_ID", DEFAULT_DATA_CENTER_ID),
+        "data_center_id": None,
     }
+    if cfg["network_volume_id"]:
+        cfg["data_center_id"] = network_volume_dc(account_key, cfg["network_volume_id"])
+        print(f"[pod_up] network volume {cfg['network_volume_id']} is in "
+              f"{cfg['data_center_id']} -- deploy pinned to that DC")
 
     start_timeout = int(env("START_TIMEOUT") or "600")
     max_tries = int(env("MAX_TRIES_PER_GPU") or "2")

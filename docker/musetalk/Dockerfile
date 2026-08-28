@@ -98,11 +98,28 @@ RUN pip install --no-cache-dir -U openmim \
 
 # Static ffmpeg build -- MuseTalk's inference.py takes an explicit
 # --ffmpeg_path rather than relying on system ffmpeg (see
-# scripts/run_musetalk.sh). Pinned to the n8.1 versioned release, not the
-# rolling "master-latest" tag, for reproducibility (confirmed available
-# via the GitHub releases API during planning).
+# scripts/run_musetalk.sh; its own upstream default is literally
+# "./ffmpeg-4.4-amd64-static/", confirming a real static binary is
+# expected -- it only prepends --ffmpeg_path to PATH, never sets
+# LD_LIBRARY_PATH, so a dynamically-linked build would fail at runtime
+# with missing libavcodec/libavformat/etc.).
+#
+# Fixed post-review (the original pin here was wrong on two counts,
+# caught by code review rather than by the Step 3 sanity check, which
+# only exercises Python imports and never runs this binary):
+# 1. The "-shared" asset variant was picked by mistake -- it's
+#    dynamically linked, not static, and crashes with
+#    "error while loading shared libraries: libavdevice.so.62: cannot
+#    open shared object file" when actually run. This is now the
+#    non-"-shared" asset from the same release, which is genuinely static.
+# 2. The "latest" release tag is BtbN's single perpetually-overwritten
+#    tag (confirmed via the GitHub releases API: same tag name, "Latest
+#    Auto-Build" title with a rolling date) -- not reproducible despite
+#    the original comment's claim. Pinned instead to a real, immutable
+#    dated release (autobuild-2026-08-27-16-45, confirmed to exist via
+#    the GitHub releases API during this fix).
 RUN wget -nv -O /tmp/ffmpeg.tar.xz \
-       https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-linux64-gpl-shared-8.1.tar.xz \
+       https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-27-16-45/ffmpeg-n8.1.2-47-g156bb4d299-linux64-gpl-8.1.tar.xz \
     && mkdir -p /opt/ffmpeg \
     && tar -xJf /tmp/ffmpeg.tar.xz -C /opt/ffmpeg --strip-components=1 \
     && rm /tmp/ffmpeg.tar.xz

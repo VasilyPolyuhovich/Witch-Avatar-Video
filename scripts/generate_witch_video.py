@@ -151,27 +151,29 @@ def validate_image(image_path):
 
 
 def compute_remote_paths(job_id, image_path, audio_path):
-    base = f"/root/jobs/{job_id}"  # pod-local disk -- no network volume in this design
+    # Job inputs/outputs still live on the pod-local disk (fast, ephemeral,
+    # cleaned up by pod termination); only the MuseTalk model weights live
+    # on the network volume (mounted at /workspace/models, see
+    # scripts/run_musetalk.sh) -- these are two independent volumes for
+    # two different purposes, not a contradiction.
+    base = f"/root/jobs/{job_id}"
     return {
         "job_dir": base,
         "input_dir": f"{base}/input",
         "output_dir": f"{base}/output",
         "image": f"{base}/input/{Path(image_path).name}",
         "audio": f"{base}/input/{Path(audio_path).name}",
-        "run_script": f"{base}/run_sadtalker.sh",
+        "run_script": f"{base}/run_musetalk.sh",
     }
 
 
-def build_remote_cmd(paths, preprocess=None):
-    cmd = [
+def build_remote_cmd(paths):
+    return " ".join([
         shlex.quote(paths["run_script"]),
         "--image", shlex.quote(paths["image"]),
         "--audio", shlex.quote(paths["audio"]),
         "--output-dir", shlex.quote(paths["output_dir"]),
-    ]
-    if preprocess:
-        cmd += ["--preprocess", shlex.quote(preprocess)]
-    return " ".join(cmd)
+    ])
 
 
 def run_ssh(ip, port, key_path, remote_cmd, timeout=60, text=True):
@@ -272,7 +274,7 @@ def generate_witch_video(
     image_path, text, *, voice_sample=None, tts_device=DEFAULT_TTS_DEVICE, output_path=None,
     min_vram=pod_up.DEFAULT_MIN_VRAM, max_price=pod_up.DEFAULT_MAX_PRICE,
     gpu_match=pod_up.DEFAULT_GPU_MATCH, run_timeout_s=DEFAULT_RUN_TIMEOUT_S,
-    start_timeout=600, dry_run=False, tts_only=False, preprocess=None,
+    start_timeout=600, dry_run=False, tts_only=False,
 ):
     """Deploy a fresh SadTalker pod, render image+audio into a video,
     retrieve it, and terminate the pod -- always, even on error/Ctrl-C.
@@ -291,7 +293,7 @@ def generate_witch_video(
         log(f"{len(ranked)} candidate GPU(s):")
         for g in ranked:
             log(f"  {g['id']:<42} {g['vram']:>4}G  ${g['price']:<6} stock={g['stock']}")
-        log(f"would run: {build_remote_cmd(paths, preprocess)}")
+        log(f"would run: {build_remote_cmd(paths)}")
         return None
 
     log(f"job_id={job_id}: generating speech via local Chatterbox TTS "
@@ -320,7 +322,18 @@ def generate_witch_video(
         "volume_gb": pod_up.DEFAULT_VOLUME_GB,
         "ports": "22/tcp",
         "registry_auth_id": pod_up.env("REGISTRY_AUTH_ID"),
+        # Required for MuseTalk's ~4.1GB weights, which live on a network
+        # volume rather than being baked into the image -- see
+        # docs/superpowers/specs/2026-08-28-musetalk-migration-design.md.
+        # data_center_id is derived automatically (network volumes are
+        # datacenter-locked), not a separate env var -- mirrors
+        # pod_up.py's own main() exactly, so the two can't drift apart.
+        "network_volume_id": pod_up.env("NETWORK_VOLUME_ID", pod_up.DEFAULT_NETWORK_VOLUME_ID),
+        "data_center_id": None,
     }
+    if cfg["network_volume_id"]:
+        cfg["data_center_id"] = pod_up.network_volume_dc(account_key, cfg["network_volume_id"])
+        log(f"network volume {cfg['network_volume_id']} is in {cfg['data_center_id']} -- deploy pinned to that DC")
     log(f"deploying pod {cfg['pod_name']} ...")
     pod_id, machine, gpu_id, gpu_price = pod_up.deploy_with_fallback(
         account_key, ranked, cfg, public_key, start_timeout)
@@ -350,11 +363,11 @@ def generate_witch_video(
         log("uploading image, audio, and run_sadtalker.sh ...")
         scp_up(ip, port, key_path, str(image_path), paths["image"])
         scp_up(ip, port, key_path, str(audio_path), paths["audio"])
-        scp_up(ip, port, key_path, str(SCRIPT_DIR / "run_sadtalker.sh"), paths["run_script"])
+        scp_up(ip, port, key_path, str(SCRIPT_DIR / "run_musetalk.sh"), paths["run_script"])
         run_ssh(ip, port, key_path, f"chmod +x {shlex.quote(paths['run_script'])}")
 
         log("starting generation -- this takes roughly 1-5 minutes on a fresh pod ...")
-        log_text = run_remote_detached(ip, port, key_path, build_remote_cmd(paths, preprocess),
+        log_text = run_remote_detached(ip, port, key_path, build_remote_cmd(paths),
                                         paths["job_dir"], run_timeout_s)
 
         output_filename = None
@@ -395,10 +408,6 @@ def _cli():
                          "(default: mps -- override if that path doesn't work on your machine, "
                          "see Task 5 Step 6).")
     p.add_argument("--output")
-    p.add_argument("--preprocess",
-                    help="Passthrough to run_sadtalker.sh's --preprocess (crop|resize|full|extcrop|extfull). "
-                         "Omit to use its own default (full). Try crop for a close portrait -- "
-                         "full is tuned for wider shots with hands/body visible (see design doc).")
     p.add_argument("--max-price", type=float, default=pod_up.DEFAULT_MAX_PRICE)
     p.add_argument("--min-vram", type=float, default=pod_up.DEFAULT_MIN_VRAM)
     p.add_argument("--gpu-match", default=pod_up.DEFAULT_GPU_MATCH)
@@ -414,7 +423,7 @@ def _cli():
     try:
         result = generate_witch_video(
             args.image, args.text, voice_sample=args.voice_sample, tts_device=args.tts_device,
-            output_path=args.output, preprocess=args.preprocess,
+            output_path=args.output,
             max_price=args.max_price, min_vram=args.min_vram, gpu_match=args.gpu_match,
             run_timeout_s=args.timeout, dry_run=args.dry_run, tts_only=args.tts_only)
     except Exception as e:

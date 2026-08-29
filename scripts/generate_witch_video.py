@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """On-demand witch avatar video generation: text -> local Chatterbox
-Multilingual V3 TTS -> deploy a fresh SadTalker pod -> render -> download
+Multilingual V3 TTS -> deploy a fresh MuseTalk pod -> render -> download
 -> terminate, always, in one call. See
 docs/2026-08-13-witch-avatar-video-design.md for the full design.
 
@@ -276,7 +276,7 @@ def generate_witch_video(
     gpu_match=pod_up.DEFAULT_GPU_MATCH, run_timeout_s=DEFAULT_RUN_TIMEOUT_S,
     start_timeout=600, dry_run=False, tts_only=False,
 ):
-    """Deploy a fresh SadTalker pod, render image+audio into a video,
+    """Deploy a fresh MuseTalk pod, render image+audio into a video,
     retrieve it, and terminate the pod -- always, even on error/Ctrl-C.
     Returns a GenerationResult, or None if dry_run=True."""
     t0 = time.monotonic()
@@ -360,7 +360,7 @@ def generate_witch_video(
         run_ssh(ip, port, key_path,
                 f"mkdir -p {shlex.quote(paths['input_dir'])} {shlex.quote(paths['output_dir'])}")
 
-        log("uploading image, audio, and run_sadtalker.sh ...")
+        log("uploading image, audio, and run_musetalk.sh ...")
         scp_up(ip, port, key_path, str(image_path), paths["image"])
         scp_up(ip, port, key_path, str(audio_path), paths["audio"])
         scp_up(ip, port, key_path, str(SCRIPT_DIR / "run_musetalk.sh"), paths["run_script"])
@@ -376,7 +376,7 @@ def generate_witch_video(
                 output_filename = line.strip()[len(FINAL_OUTPUT_MARKER):]
         if not output_filename:
             raise RuntimeError(
-                "run_sadtalker.sh finished but never printed "
+                "run_musetalk.sh finished but never printed "
                 "'Final output will be: ...' -- can't locate the result")
 
         local_out = Path(output_path) if output_path else Path("outputs") / f"{job_id}.mp4"
@@ -397,7 +397,7 @@ def generate_witch_video(
 
 def _cli():
     p = argparse.ArgumentParser(
-        description="Generate a witch avatar video via an on-demand RunPod SadTalker pod.")
+        description="Generate a witch avatar video via an on-demand RunPod MuseTalk pod.")
     p.add_argument("--image", required=True)
     p.add_argument("--text", required=True)
     p.add_argument("--voice-sample",

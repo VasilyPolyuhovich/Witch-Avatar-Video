@@ -97,13 +97,18 @@ ln -sfn /workspace/models /opt/MuseTalk/models
 # frame_list_cycle by index modulo its length regardless of how many
 # distinct frames it started from).
 NORMALIZED_VIDEO=$(mktemp --suffix=.mp4)
+CONFIG_FILE=$(mktemp --suffix=.yaml)
+# Registered right after both temp files are named, before the ffmpeg
+# re-encode below can fail -- code review on this task caught an earlier
+# version that registered this trap after the ffmpeg call, which leaked
+# NORMALIZED_VIDEO on the ffmpeg-fails-and-set-e-aborts path.
+trap 'rm -f "$CONFIG_FILE" "$NORMALIZED_VIDEO"' EXIT
+
 /opt/ffmpeg/bin/ffmpeg -y -v error -i "$IMAGE" -frames:v 1 -r 25 \
   -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -pix_fmt yuv420p -c:v libx264 \
   "$NORMALIZED_VIDEO"
 IMAGE="$NORMALIZED_VIDEO"
 
-CONFIG_FILE=$(mktemp --suffix=.yaml)
-trap 'rm -f "$CONFIG_FILE" "$NORMALIZED_VIDEO"' EXIT
 cat > "$CONFIG_FILE" <<EOF
 job:
  video_path: "$IMAGE"

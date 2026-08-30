@@ -1,1 +1,48 @@
-<html><body>placeholder, see Task 7</body></html>
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <title id="page-title">Witch Avatar Video</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1 id="app-title"></h1>
+    <div class="lang-switch">
+      <button id="lang-en">EN</button>
+      <button id="lang-ua">UA</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="session-controls">
+      <span id="status-label"></span>
+      <span id="elapsed-label"></span>
+      <button id="start-btn"></button>
+      <button id="stop-btn"></button>
+    </section>
+
+    <section id="generate-form" style="display:none;">
+      <label id="photo-label" for="photo-input"></label>
+      <input type="file" id="photo-input" accept="image/*">
+
+      <label id="text-label" for="text-input"></label>
+      <textarea id="text-input"></textarea>
+
+      <label id="voice-label" for="voice-input"></label>
+      <input type="file" id="voice-input" accept="audio/*">
+
+      <button id="generate-btn"></button>
+    </section>
+
+    <section id="result-section" style="display:none;">
+      <video id="result-video" controls></video>
+    </section>
+
+    <section id="warning-banner" style="display:none;"></section>
+  </main>
+
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

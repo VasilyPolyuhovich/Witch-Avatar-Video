@@ -1,0 +1,123 @@
+"""Wraps scripts/pod_up.py's deploy/rank/terminate functions into a
+stateful session object the WebUI backend can drive: start a pod, poll
+whether it's ready, forward generate/status/result calls to its HTTP
+API, and stop it. See
+docs/superpowers/specs/2026-08-30-webui-design.md."""
+import sys
+import time
+from pathlib import Path
+
+import requests
+
+SCRIPT_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
+sys.path.insert(0, str(SCRIPT_DIR))
+import pod_up  # noqa: E402
+
+# The port the backend's HTTP API (whatever Docker image implements the
+# /health,/heartbeat,/generate,/status,/result contract) listens on
+# inside the pod.
+HTTP_PRIVATE_PORT = 8000
+
+# NOT independently confirmed against RunPod's own docs for the
+# mixed-protocol case (their docs describe HTTP and TCP port lists
+# separately, not a single combined string) -- this format matches the
+# project's one confirmed-working single-port case ("22/tcp") plus
+# RunPod's documented comma-separated-list convention for HTTP ports.
+# Task 8 of this plan's real end-to-end deploy is what actually verifies
+# this string is accepted and both ports resolve.
+DEFAULT_PORTS = "22/tcp,8000/http"
+
+DEFAULT_MIN_VRAM = 8.0
+DEFAULT_MAX_PRICE = 0.60
+DEFAULT_CONTAINER_DISK_GB = 20
+DEFAULT_START_TIMEOUT_S = 600
+
+
+class RunPodSession:
+    def __init__(self, account_key, image_ref):
+        self.account_key = account_key
+        self.image_ref = image_ref
+        self.pod_id = None
+        self.base_url = None
+        self.started_at = None
+
+    def start(self):
+        cfg = {
+            "image": self.image_ref,
+            "pod_name": f"{pod_up.POD_NAME_PREFIX}-webui",
+            "container_disk": DEFAULT_CONTAINER_DISK_GB,
+            "volume_gb": pod_up.DEFAULT_VOLUME_GB,
+            "ports": DEFAULT_PORTS,
+            "registry_auth_id": pod_up.env("REGISTRY_AUTH_ID"),
+            "network_volume_id": pod_up.env("NETWORK_VOLUME_ID", pod_up.DEFAULT_NETWORK_VOLUME_ID),
+            "data_center_id": None,
+        }
+        if cfg["network_volume_id"]:
+            cfg["data_center_id"] = pod_up.network_volume_dc(self.account_key, cfg["network_volume_id"])
+
+        ranked = pod_up.rank_gpus(self.account_key, DEFAULT_MIN_VRAM, DEFAULT_MAX_PRICE, "")
+        if not ranked:
+            raise RuntimeError("no_gpu_available")
+
+        public_key = pod_up.load_public_key()
+        pod_id, _machine, _gpu_id, _gpu_price = pod_up.deploy_with_fallback(
+            self.account_key, ranked, cfg, public_key, DEFAULT_START_TIMEOUT_S)
+
+        self.pod_id = pod_id
+        self.started_at = time.monotonic()
+        self._refresh_endpoint()
+        return pod_id
+
+    def stop(self):
+        if self.pod_id:
+            pod_up.terminate(self.account_key, self.pod_id)
+        self.pod_id = None
+        self.base_url = None
+        self.started_at = None
+
+    def _refresh_endpoint(self):
+        if self.pod_id and not self.base_url:
+            endpoint = pod_up.get_port_endpoint(self.account_key, self.pod_id, HTTP_PRIVATE_PORT)
+            if endpoint:
+                ip, port = endpoint
+                self.base_url = f"http://{ip}:{port}"
+
+    def poll_health(self):
+        """Sends a heartbeat to the pod (this IS the heartbeat -- see
+        this module's docstring) and returns whether it reports itself
+        ready. Returns False, without raising, on any connection error --
+        'not reachable yet' is a normal state while the pod boots."""
+        if not self.pod_id:
+            return False
+        self._refresh_endpoint()
+        if not self.base_url:
+            return False
+        try:
+            requests.post(f"{self.base_url}/heartbeat", timeout=5)
+            resp = requests.get(f"{self.base_url}/health", timeout=5)
+            return bool(resp.json().get("ready", False))
+        except requests.RequestException:
+            return False
+
+    def elapsed_seconds(self):
+        if self.started_at is None:
+            return 0
+        return time.monotonic() - self.started_at
+
+    def generate(self, image_bytes, image_filename, text, voice_bytes, voice_filename):
+        files = {"image": (image_filename, image_bytes)}
+        if voice_bytes:
+            files["voice"] = (voice_filename, voice_bytes)
+        resp = requests.post(f"{self.base_url}/generate", data={"text": text}, files=files, timeout=30)
+        resp.raise_for_status()
+        return resp.json()["job_id"]
+
+    def get_status(self, job_id):
+        resp = requests.get(f"{self.base_url}/status/{job_id}", timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_result(self, job_id):
+        resp = requests.get(f"{self.base_url}/result/{job_id}", timeout=30)
+        resp.raise_for_status()
+        return resp.content

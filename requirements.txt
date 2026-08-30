@@ -4,3 +4,9 @@
 # (version resolved per-Python-version by chatterbox-tts's own dependency
 # metadata -- no separate torch pin needed here).
 chatterbox-tts
+
+# Local WebUI (webui/) -- see docs/superpowers/specs/2026-08-30-webui-design.md.
+fastapi
+uvicorn
+python-multipart
+requests

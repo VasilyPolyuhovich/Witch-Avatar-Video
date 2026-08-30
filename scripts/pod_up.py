@@ -206,14 +206,23 @@ def wait_container_start(account_key, pod_id, machine, timeout):
     return 0, machine
 
 
-def get_ssh_endpoint(account_key, pod_id):
+def get_port_endpoint(account_key, pod_id, private_port):
+    """Returns (ip, public_port) for whichever exposed port matches
+    private_port, or None if not yet published. Generalized from the
+    SSH-only version this replaced so the WebUI can look up its HTTP API
+    port (see docs/superpowers/specs/2026-08-30-webui-design.md) the same
+    way generate_witch_video.py already looks up SSH's port 22."""
     q = ("query{pod(input:{podId:%s}){runtime{ports{ip isIpPublic "
          "publicPort privatePort type}}}}" % json.dumps(pod_id))
     p = (gql(account_key, q).get("data") or {}).get("pod") or {}
     for prt in ((p.get("runtime") or {}).get("ports")) or []:
-        if prt.get("privatePort") == 22 and prt.get("type") == "tcp":
+        if prt.get("privatePort") == private_port:
             return prt.get("ip"), prt.get("publicPort")
     return None
+
+
+def get_ssh_endpoint(account_key, pod_id):
+    return get_port_endpoint(account_key, pod_id, 22)
 
 
 def ssh_flags(key_path):

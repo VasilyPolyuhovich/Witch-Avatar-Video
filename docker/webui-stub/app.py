@@ -23,7 +23,13 @@ WARMUP_S = 5
 READY_AT = time.monotonic() + WARMUP_S
 
 LAST_HEARTBEAT = time.monotonic()
-HEARTBEAT_TIMEOUT_S = 90
+# RunPod's own docs (docs.runpod.io/pods/configuration/expose-ports) warn
+# that proxy routing to an HTTP port "may take a few minutes to start up"
+# after the container itself is already listening -- confirmed for real in
+# Task 8 (2026-08-31), where a 90s timeout self-terminated the pod before
+# the proxy ever finished warming up. Set well above that window so a slow
+# proxy attach doesn't get mistaken for an unreachable WebUI.
+HEARTBEAT_TIMEOUT_S = 300
 
 JOBS = {}  # job_id -> {"status": "running"|"done"|"error", "error_code": str|None, "video": bytes|None}
 

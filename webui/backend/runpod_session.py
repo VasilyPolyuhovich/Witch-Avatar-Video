@@ -18,13 +18,8 @@ import pod_up  # noqa: E402
 # inside the pod.
 HTTP_PRIVATE_PORT = 8000
 
-# NOT independently confirmed against RunPod's own docs for the
-# mixed-protocol case (their docs describe HTTP and TCP port lists
-# separately, not a single combined string) -- this format matches the
-# project's one confirmed-working single-port case ("22/tcp") plus
-# RunPod's documented comma-separated-list convention for HTTP ports.
-# Task 8 of this plan's real end-to-end deploy is what actually verifies
-# this string is accepted and both ports resolve.
+# Confirmed via a real Task 8 deploy (2026-08-31): RunPod accepts this
+# mixed tcp+http format and publishes both ports in runtime.ports.
 DEFAULT_PORTS = "22/tcp,8000/http"
 
 DEFAULT_MIN_VRAM = 8.0
@@ -76,11 +71,20 @@ class RunPodSession:
         self.started_at = None
 
     def _refresh_endpoint(self):
+        """Builds base_url from RunPod's proxy domain, not the raw ip:port
+        pod_up.get_port_endpoint() returns. Confirmed against a real Task 8
+        deploy (2026-08-31) and RunPod's own docs
+        (docs.runpod.io/pods/configuration/expose-ports): hosts without a
+        public IP for a given port report `isIpPublic: false` and an
+        internal-only overlay IP for HTTP-type ports, which is unreachable
+        from outside RunPod's network -- the proxy domain is the only
+        universally-correct way to reach an HTTP port. get_port_endpoint's
+        return value is used only to confirm the port has been published in
+        runtime.ports yet, not to build the URL itself."""
         if self.pod_id and not self.base_url:
             endpoint = pod_up.get_port_endpoint(self.account_key, self.pod_id, HTTP_PRIVATE_PORT)
             if endpoint:
-                ip, port = endpoint
-                self.base_url = f"http://{ip}:{port}"
+                self.base_url = f"https://{self.pod_id}-{HTTP_PRIVATE_PORT}.proxy.runpod.net"
 
     def poll_health(self):
         """Sends a heartbeat to the pod (this IS the heartbeat -- see

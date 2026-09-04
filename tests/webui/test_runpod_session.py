@@ -19,7 +19,7 @@ def test_start_deploys_pod_and_resolves_http_endpoint():
         pod_id = session.start()
     assert pod_id == "pod-123"
     assert session.pod_id == "pod-123"
-    assert session.base_url == "http://1.2.3.4:18000"
+    assert session.base_url == "https://pod-123-8000.proxy.runpod.net"
     assert session.started_at is not None
 
 

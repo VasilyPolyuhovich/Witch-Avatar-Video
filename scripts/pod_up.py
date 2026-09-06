@@ -130,8 +130,10 @@ def rank_gpus(account_key, min_vram, max_price, gpu_match):
     return out
 
 
-def build_env_list(public_key):
-    return [{"key": "PUBLIC_KEY", "value": public_key}] if public_key else []
+def build_env_list(public_key, extra_env=None):
+    env = [{"key": "PUBLIC_KEY", "value": public_key}] if public_key else []
+    env.extend({"key": k, "value": v} for k, v in (extra_env or {}).items())
+    return env
 
 
 def network_volume_dc(account_key, vol_id):
@@ -158,7 +160,7 @@ def deploy(account_key, gpu_id, cfg, public_key):
         "containerDiskInGb": cfg["container_disk"],
         "volumeMountPath": "/workspace",
         "ports": cfg["ports"],
-        "env": build_env_list(public_key),
+        "env": build_env_list(public_key, cfg.get("extra_env")),
     }
     if cfg["registry_auth_id"]:
         inp["containerRegistryAuthId"] = cfg["registry_auth_id"]

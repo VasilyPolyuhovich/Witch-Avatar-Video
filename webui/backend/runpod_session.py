@@ -46,6 +46,13 @@ class RunPodSession:
             "registry_auth_id": pod_up.env("REGISTRY_AUTH_ID"),
             "network_volume_id": pod_up.env("NETWORK_VOLUME_ID", pod_up.DEFAULT_NETWORK_VOLUME_ID),
             "data_center_id": None,
+            # The pod's own heartbeat-timeout safety net calls RunPod's
+            # terminate API on itself (see docs/superpowers/specs/2026-08-30-
+            # webui-design.md's Cost safety section) -- it needs this same
+            # scoped key, not a second credential. RUNPOD_POD_ID is already
+            # auto-injected by RunPod into every pod, so only the key needs
+            # passing explicitly.
+            "extra_env": {"RUNPOD_API_KEY": self.account_key},
         }
         if cfg["network_volume_id"]:
             cfg["data_center_id"] = pod_up.network_volume_dc(self.account_key, cfg["network_volume_id"])

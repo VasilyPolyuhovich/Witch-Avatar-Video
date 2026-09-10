@@ -22,7 +22,11 @@ HTTP_PRIVATE_PORT = 8000
 # mixed tcp+http format and publishes both ports in runtime.ports.
 DEFAULT_PORTS = "22/tcp,8000/http"
 
-DEFAULT_MIN_VRAM = 8.0
+# Raised from 8.0 (the stub backend's arbitrary placeholder) to match
+# scripts/pod_up.py's own EchoMimicV3 floor -- see
+# docs/superpowers/plans/2026-09-09-echomimicv3-migration-implementation.md,
+# Task 6, for why 40.0 and not something lower.
+DEFAULT_MIN_VRAM = 40.0
 DEFAULT_MAX_PRICE = 0.60
 DEFAULT_CONTAINER_DISK_GB = 20
 DEFAULT_START_TIMEOUT_S = 600

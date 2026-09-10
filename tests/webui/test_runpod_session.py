@@ -10,6 +10,11 @@ import pod_up  # noqa: E402
 from webui.backend.runpod_session import RunPodSession  # noqa: E402
 
 
+def test_default_min_vram_matches_echomimicv3_floor():
+    from webui.backend import runpod_session
+    assert runpod_session.DEFAULT_MIN_VRAM >= 40.0
+
+
 def test_start_deploys_pod_and_resolves_http_endpoint():
     session = RunPodSession(account_key="fake-key", image_ref="fake/image:latest")
     with patch.object(pod_up, "rank_gpus", return_value=[{"id": "GPU-1", "vram": 16, "price": 0.2, "stock": "High"}]), \

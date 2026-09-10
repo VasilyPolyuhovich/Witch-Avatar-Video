@@ -14,6 +14,7 @@ def test_start_deploys_pod_and_resolves_http_endpoint():
     session = RunPodSession(account_key="fake-key", image_ref="fake/image:latest")
     with patch.object(pod_up, "rank_gpus", return_value=[{"id": "GPU-1", "vram": 16, "price": 0.2, "stock": "High"}]), \
          patch.object(pod_up, "load_public_key", return_value="ssh-rsa fake"), \
+         patch.object(pod_up, "network_volume_dc", return_value="EU-RO-1"), \
          patch.object(pod_up, "deploy_with_fallback", return_value=("pod-123", "machine-1", "GPU-1", 0.2)), \
          patch.object(pod_up, "get_port_endpoint", return_value=("1.2.3.4", 18000)):
         pod_id = session.start()
@@ -32,6 +33,7 @@ def test_start_passes_account_key_to_pod_as_runpod_api_key():
     session = RunPodSession(account_key="fake-key", image_ref="fake/image:latest")
     with patch.object(pod_up, "rank_gpus", return_value=[{"id": "GPU-1", "vram": 16, "price": 0.2, "stock": "High"}]), \
          patch.object(pod_up, "load_public_key", return_value="ssh-rsa fake"), \
+         patch.object(pod_up, "network_volume_dc", return_value="EU-RO-1"), \
          patch.object(pod_up, "deploy_with_fallback", return_value=("pod-123", "machine-1", "GPU-1", 0.2)) as mock_deploy, \
          patch.object(pod_up, "get_port_endpoint", return_value=("1.2.3.4", 18000)):
         session.start()
@@ -41,7 +43,8 @@ def test_start_passes_account_key_to_pod_as_runpod_api_key():
 
 def test_start_raises_runtime_error_when_no_gpu_available():
     session = RunPodSession(account_key="fake-key", image_ref="fake/image:latest")
-    with patch.object(pod_up, "rank_gpus", return_value=[]):
+    with patch.object(pod_up, "rank_gpus", return_value=[]), \
+         patch.object(pod_up, "network_volume_dc", return_value="EU-RO-1"):
         try:
             session.start()
             assert False, "expected RuntimeError"

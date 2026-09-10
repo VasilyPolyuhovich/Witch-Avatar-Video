@@ -40,7 +40,12 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))  # so `import pod_up` works regardless of caller's cwd
 import pod_up  # noqa: E402
 
-DEFAULT_RUN_TIMEOUT_S = 600
+# Raised from MuseTalk's 600s: a real EchoMimicV3-Flash render (model
+# load + 8-step sampling for an 81-frame/3.24s clip) took ~9-10 minutes
+# wall-clock across two real pod deploys, 2026-09-08/09. 900s leaves
+# headroom without being so generous a genuinely stuck render burns
+# money for 15+ minutes before this timeout fires.
+DEFAULT_RUN_TIMEOUT_S = 900
 DEFAULT_TTS_DEVICE = "mps"  # this project's dev machine is Apple Silicon; override for portability
 FINAL_OUTPUT_MARKER = "Final output will be: "
 
@@ -152,10 +157,10 @@ def validate_image(image_path):
 
 def compute_remote_paths(job_id, image_path, audio_path):
     # Job inputs/outputs still live on the pod-local disk (fast, ephemeral,
-    # cleaned up by pod termination); only the MuseTalk model weights live
-    # on the network volume (mounted at /workspace/models, see
-    # scripts/run_musetalk.sh) -- these are two independent volumes for
-    # two different purposes, not a contradiction.
+    # cleaned up by pod termination); only the EchoMimicV3 model weights
+    # live on the network volume (mounted at /workspace/models, see
+    # scripts/run_echomimicv3.sh) -- these are two independent volumes
+    # for two different purposes, not a contradiction.
     base = f"/root/jobs/{job_id}"
     return {
         "job_dir": base,
@@ -163,7 +168,7 @@ def compute_remote_paths(job_id, image_path, audio_path):
         "output_dir": f"{base}/output",
         "image": f"{base}/input/{Path(image_path).name}",
         "audio": f"{base}/input/{Path(audio_path).name}",
-        "run_script": f"{base}/run_musetalk.sh",
+        "run_script": f"{base}/run_echomimicv3.sh",
     }
 
 
@@ -360,13 +365,13 @@ def generate_witch_video(
         run_ssh(ip, port, key_path,
                 f"mkdir -p {shlex.quote(paths['input_dir'])} {shlex.quote(paths['output_dir'])}")
 
-        log("uploading image, audio, and run_musetalk.sh ...")
+        log("uploading image, audio, and run_echomimicv3.sh ...")
         scp_up(ip, port, key_path, str(image_path), paths["image"])
         scp_up(ip, port, key_path, str(audio_path), paths["audio"])
-        scp_up(ip, port, key_path, str(SCRIPT_DIR / "run_musetalk.sh"), paths["run_script"])
+        scp_up(ip, port, key_path, str(SCRIPT_DIR / "run_echomimicv3.sh"), paths["run_script"])
         run_ssh(ip, port, key_path, f"chmod +x {shlex.quote(paths['run_script'])}")
 
-        log("starting generation -- this takes roughly 1-5 minutes on a fresh pod ...")
+        log("starting generation -- this takes roughly 9-10 minutes on a fresh pod ...")
         log_text = run_remote_detached(ip, port, key_path, build_remote_cmd(paths),
                                         paths["job_dir"], run_timeout_s)
 
@@ -376,7 +381,7 @@ def generate_witch_video(
                 output_filename = line.strip()[len(FINAL_OUTPUT_MARKER):]
         if not output_filename:
             raise RuntimeError(
-                "run_musetalk.sh finished but never printed "
+                "run_echomimicv3.sh finished but never printed "
                 "'Final output will be: ...' -- can't locate the result")
 
         local_out = Path(output_path) if output_path else Path("outputs") / f"{job_id}.mp4"

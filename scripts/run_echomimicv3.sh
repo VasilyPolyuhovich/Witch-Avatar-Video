@@ -64,7 +64,7 @@ ln -sfn "$WEIGHTS" /opt/echomimic_v3/flash
 
 FPS=25
 MAX_FRAMES=138
-AUDIO_DURATION=$(python3 -c "import librosa; print(librosa.get_duration(path='$AUDIO'))")
+AUDIO_DURATION=$(python3 -c "import sys, librosa; print(librosa.get_duration(path=sys.argv[1]))" "$AUDIO")
 VIDEO_LENGTH=$(python3 -c "print(max(1, round($AUDIO_DURATION * $FPS)))")
 if (( VIDEO_LENGTH > MAX_FRAMES )); then
   echo "WARNING: audio is ${AUDIO_DURATION}s (${VIDEO_LENGTH} frames @ ${FPS}fps)," >&2

@@ -44,16 +44,22 @@ UA = "witch-avatar-video-pod-up/1.0"  # default python-urllib UA gets 403'd by t
 POD_NAME_PREFIX = "witch-avatar-video"
 STOCK_RANK = {"High": 0, "Medium": 1, "Low": 2}
 
-DEFAULT_MIN_VRAM = 16.0
+# Raised from 16.0 (MuseTalk's floor) to 40.0 for EchoMimicV3-Flash: a
+# real 24GB card OOM'd loading this model even with its own default
+# sequential_cpu_offload; only confirmed working on 48GB so far. This is
+# a safety margin, not a measured minimum -- see this project's
+# 2026-09-09 migration plan, Task 6.
+DEFAULT_MIN_VRAM = 40.0
 DEFAULT_MAX_PRICE = 0.60
-DEFAULT_GPU_MATCH = ""  # deliberately unrestricted -- SadTalker has no per-arch build constraint
+DEFAULT_GPU_MATCH = ""  # deliberately unrestricted -- no per-arch build constraint
 DEFAULT_CONTAINER_DISK_GB = 30
 DEFAULT_VOLUME_GB = 10  # small pod volume, unused for anything but required by the deploy API
-# Points at MuseTalk, not SadTalker, as of the 2026-08-28 migration (see
-# docs/superpowers/specs/2026-08-28-musetalk-migration-design.md) --
-# docker/sadtalker/ is kept as a non-wired-in fallback, not the active path.
-DEFAULT_IMAGE_REF = "ghcr.io/vasilypolyuhovich/witch-avatar-musetalk:latest"
-DEFAULT_NETWORK_VOLUME_ID = None
+# Points at EchoMimicV3-Flash, not MuseTalk, as of the 2026-09-09
+# migration -- see docs/superpowers/plans/2026-09-09-echomimicv3-migration-implementation.md.
+DEFAULT_IMAGE_REF = "ghcr.io/vasilypolyuhovich/witch-avatar-echomimicv3:latest"
+# Network volume hqrteuw6fj (30GB, EU-RO-1, ~24GB of EchoMimicV3 weights
+# populated 2026-09-09 via scripts/populate_echomimicv3_volume.sh).
+DEFAULT_NETWORK_VOLUME_ID = "hqrteuw6fj"
 DEFAULT_SSH_PUBKEY_FILE = "~/.runpod/ssh/runpodctl-witch-video-ssh-key.pub"
 DEFAULT_SSH_PRIVKEY_FILE = "~/.runpod/ssh/runpodctl-witch-video-ssh-key"
 DEFAULT_ACCOUNT_KEY_FILE = "~/.runpod-key-witch-video"

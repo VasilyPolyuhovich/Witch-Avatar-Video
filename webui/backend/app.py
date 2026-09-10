@@ -82,7 +82,13 @@ async def api_generate(
         voice_sample_path = None
         if voice is not None:
             voice_bytes = await voice.read()
-            voice_sample_path = Path(tmp) / (voice.filename or "voice_sample.wav")
+            # voice.filename is client-controlled over this network-facing
+            # endpoint -- joining it into a path directly let a name like
+            # "../../etc/cron.d/x" write outside `tmp` (found by automated
+            # commit review, 2026-09-10, same class of bug already fixed
+            # in docker/echomimicv3-webui/app.py). Keep only the extension.
+            voice_ext = Path(voice.filename or "").suffix or ".wav"
+            voice_sample_path = Path(tmp) / f"voice_sample{voice_ext}"
             voice_sample_path.write_bytes(voice_bytes)
 
         audio_path = Path(tmp) / "synthesized.wav"

@@ -102,6 +102,31 @@ def test_generate_forwards_to_session_when_ready(client):
     app_module.session.base_url = None
 
 
+def test_generate_ignores_path_traversal_in_voice_filename(client):
+    """voice.filename is client-controlled over this network-facing
+    endpoint -- a name like '../../etc/cron.d/x' must never be joined
+    into a filesystem path. Found by automated commit review, 2026-09-10."""
+    from webui.backend import app as app_module
+    app_module.session.base_url = "http://1.2.3.4:18000"
+    captured = {}
+
+    def fake_tts(text, output_path, *, voice_sample=None, device=None):
+        captured["voice_sample_path"] = str(voice_sample)
+        Path(output_path).write_bytes(b"synthesized-audio-bytes")
+
+    with patch.object(app_module.generate_witch_video, "text_to_speech", side_effect=fake_tts), \
+         patch.object(app_module.session, "generate", return_value="job-1"):
+        resp = client.post(
+            "/api/generate", headers=AUTH_HEADERS,
+            data={"text": "hello"},
+            files={"image": ("photo.jpg", b"fake-image", "image/jpeg"),
+                   "voice": ("../../etc/cron.d/evil.wav", b"fake-voice", "audio/wav")})
+    assert resp.status_code == 200
+    assert ".." not in captured["voice_sample_path"]
+    assert captured["voice_sample_path"].endswith("voice_sample.wav")
+    app_module.session.base_url = None
+
+
 def test_generate_synthesizes_speech_locally_instead_of_forwarding_raw_upload(client):
     """The 'voice' upload is a voice-CLONING reference sample (see
     webui/frontend/i18n.js's 'Voice sample (optional)' label), not

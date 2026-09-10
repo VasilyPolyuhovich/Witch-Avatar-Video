@@ -1,6 +1,19 @@
 """Local WebUI backend: serves the static frontend and exposes a small
 password-gated API that drives a RunPodSession. See
-docs/superpowers/specs/2026-08-30-webui-design.md."""
+docs/superpowers/specs/2026-08-30-webui-design.md.
+
+The 'voice' upload in /api/generate is a voice-CLONING reference sample
+(see webui/frontend/i18n.js's "Voice sample (optional)" label) -- this
+backend runs Chatterbox TTS on `text` itself (locally, on this machine,
+same as scripts/generate_witch_video.py's own text_to_speech -- NOT on
+the GPU pod, which can't have both Chatterbox's and EchoMimicV3's pinned
+transformers/diffusers versions installed at once, they conflict) and
+forwards the *synthesized* audio to the pod, not the raw uploaded clip.
+Fixed 2026-09-10 after this was found to be a blind pass-through instead
+-- see docs/superpowers/plans/2026-09-09-echomimicv3-migration-implementation.md,
+Task 9b."""
+import sys
+import tempfile
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
@@ -11,6 +24,9 @@ from . import config
 from .runpod_session import RunPodSession
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+SCRIPT_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
+sys.path.insert(0, str(SCRIPT_DIR))
+import generate_witch_video  # noqa: E402
 
 app = FastAPI()
 
@@ -61,9 +77,19 @@ async def api_generate(
     if not session.base_url:
         raise HTTPException(status_code=409, detail="not_ready")
     image_bytes = await image.read()
-    voice_bytes = await voice.read() if voice else None
-    voice_filename = voice.filename if voice else None
-    job_id = session.generate(image_bytes, image.filename, text, voice_bytes, voice_filename)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        voice_sample_path = None
+        if voice is not None:
+            voice_bytes = await voice.read()
+            voice_sample_path = Path(tmp) / (voice.filename or "voice_sample.wav")
+            voice_sample_path.write_bytes(voice_bytes)
+
+        audio_path = Path(tmp) / "synthesized.wav"
+        generate_witch_video.text_to_speech(text, audio_path, voice_sample=voice_sample_path)
+        synthesized_audio_bytes = audio_path.read_bytes()
+
+    job_id = session.generate(image_bytes, image.filename, text, synthesized_audio_bytes, "synthesized.wav")
     return {"job_id": job_id}
 
 

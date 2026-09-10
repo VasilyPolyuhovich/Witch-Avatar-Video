@@ -84,14 +84,51 @@ def test_generate_returns_409_when_not_ready(client):
     assert resp.status_code == 409
 
 
+def _fake_tts(text, output_path, *, voice_sample=None, device=None):
+    Path(output_path).write_bytes(b"synthesized-audio-bytes")
+
+
 def test_generate_forwards_to_session_when_ready(client):
     from webui.backend import app as app_module
     app_module.session.base_url = "http://1.2.3.4:18000"
-    with patch.object(app_module.session, "generate", return_value="job-1") as mock_generate:
+    with patch.object(app_module.generate_witch_video, "text_to_speech", side_effect=_fake_tts), \
+         patch.object(app_module.session, "generate", return_value="job-1") as mock_generate:
         resp = client.post(
             "/api/generate", headers=AUTH_HEADERS,
             data={"text": "hello"}, files={"image": ("photo.jpg", b"fake", "image/jpeg")})
     assert resp.status_code == 200
     assert resp.json() == {"job_id": "job-1"}
     mock_generate.assert_called_once()
+    app_module.session.base_url = None
+
+
+def test_generate_synthesizes_speech_locally_instead_of_forwarding_raw_upload(client):
+    """The 'voice' upload is a voice-CLONING reference sample (see
+    webui/frontend/i18n.js's 'Voice sample (optional)' label), not
+    ready-to-use driving audio -- the backend must run TTS on `text`
+    itself and forward the *synthesized* audio to the pod, not the raw
+    uploaded clip. Found via a user question, 2026-09-10 -- the pod-side
+    contract (docker/echomimicv3-webui/app.py) already expected
+    synthesized audio; this local backend was blindly pass-through
+    forwarding the clone sample instead."""
+    from webui.backend import app as app_module
+    app_module.session.base_url = "http://1.2.3.4:18000"
+    with patch.object(app_module.generate_witch_video, "text_to_speech", side_effect=_fake_tts) as mock_tts, \
+         patch.object(app_module.session, "generate", return_value="job-1") as mock_generate:
+        resp = client.post(
+            "/api/generate", headers=AUTH_HEADERS,
+            data={"text": "Привіт, світе"},
+            files={"image": ("photo.jpg", b"fake-image", "image/jpeg"),
+                   "voice": ("clone-sample.wav", b"raw-clone-sample-bytes", "audio/wav")})
+    assert resp.status_code == 200
+
+    mock_tts.assert_called_once()
+    assert mock_tts.call_args.args[0] == "Привіт, світе"
+    assert mock_tts.call_args.kwargs["voice_sample"] is not None
+
+    mock_generate.assert_called_once()
+    generate_args = mock_generate.call_args.args
+    # session.generate(image_bytes, image_filename, text, voice_bytes, voice_filename)
+    assert generate_args[3] == b"synthesized-audio-bytes"
+    assert generate_args[3] != b"raw-clone-sample-bytes"
     app_module.session.base_url = None

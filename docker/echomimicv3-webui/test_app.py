@@ -15,6 +15,42 @@ def test_health_reports_not_ready_during_warmup():
     assert resp.json() == {"ready": False}
 
 
+def test_run_inference_ignores_path_traversal_in_filenames(tmp_path, monkeypatch):
+    """A malicious client-supplied filename like '../../etc/cron.d/x'
+    must never be joined into a filesystem path -- found by automated
+    commit review, 2026-09-10."""
+    import sys
+    import types
+
+    fake_librosa = types.ModuleType("librosa")
+    fake_librosa.get_duration = lambda path: 1.0
+    monkeypatch.setitem(sys.modules, "librosa", fake_librosa)
+
+    captured = {}
+
+    class FakeCompletedProcess:
+        returncode = 0
+        stdout = f"Saved output to: {tmp_path}/out.mp4"
+        stderr = ""
+
+    def fake_run(cmd, cwd, capture_output, text):
+        captured["image_path"] = cmd[cmd.index("--image_path") + 1]
+        captured["audio_path"] = cmd[cmd.index("--audio_path") + 1]
+        (tmp_path / "out.mp4").write_bytes(b"fake-mp4")
+        return FakeCompletedProcess()
+
+    monkeypatch.setattr(app_module.subprocess, "run", fake_run)
+
+    app_module.run_inference(
+        b"fake-jpg-bytes", "../../etc/cron.d/evil.jpg",
+        b"fake-wav-bytes", "../../../tmp/evil.wav",
+    )
+    assert ".." not in captured["image_path"]
+    assert ".." not in captured["audio_path"]
+    assert captured["image_path"].endswith("image.jpg")
+    assert captured["audio_path"].endswith("audio.wav")
+
+
 def test_generate_runs_inference_and_reports_done():
     client = TestClient(app_module.app)
     app_module.READY_AT = time.monotonic()  # ready now

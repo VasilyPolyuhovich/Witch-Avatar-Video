@@ -96,8 +96,18 @@ def run_inference(image_bytes, image_filename, audio_bytes, audio_filename):
     this container calls infer_flash.py directly rather than shelling
     out to that SSH-oriented script)."""
     with tempfile.TemporaryDirectory() as tmp:
-        image_path = os.path.join(tmp, image_filename)
-        audio_path = os.path.join(tmp, audio_filename)
+        # image_filename/audio_filename come straight from the uploaded
+        # file's client-supplied name (UploadFile.filename) -- untrusted
+        # over this network-facing endpoint. Building our own filenames
+        # from just the extension (not os.path.join(tmp, image_filename)
+        # directly) closes a path-traversal write via a name like
+        # "../../etc/cron.d/x" (found by automated commit review,
+        # 2026-09-10) rather than trusting os.path.basename() to catch
+        # every platform-specific edge case.
+        image_ext = os.path.splitext(image_filename or "")[1] or ".jpg"
+        audio_ext = os.path.splitext(audio_filename or "")[1] or ".wav"
+        image_path = os.path.join(tmp, f"image{image_ext}")
+        audio_path = os.path.join(tmp, f"audio{audio_ext}")
         with open(image_path, "wb") as f:
             f.write(image_bytes)
         with open(audio_path, "wb") as f:

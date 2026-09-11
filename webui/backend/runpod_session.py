@@ -27,7 +27,13 @@ DEFAULT_PORTS = "22/tcp,8000/http"
 # docs/superpowers/plans/2026-09-09-echomimicv3-migration-implementation.md,
 # Task 6, for why 40.0 and not something lower.
 DEFAULT_MIN_VRAM = 40.0
-DEFAULT_MAX_PRICE = 0.60
+# Raised from 0.60 2026-09-11, same rationale as scripts/pod_up.py's own
+# DEFAULT_MAX_PRICE: a render finishes in ~10-15 min and the pod
+# terminates right after, so a pricier card only adds cents per video --
+# worth it for the much wider GPU pool it unlocks.
+DEFAULT_MAX_PRICE = 3.00
+# Excludes AMD/ROCm cards -- our image is CUDA-only (cu124).
+DEFAULT_GPU_MATCH = "^(?!AMD)"
 DEFAULT_CONTAINER_DISK_GB = 20
 DEFAULT_START_TIMEOUT_S = 600
 
@@ -61,7 +67,7 @@ class RunPodSession:
         if cfg["network_volume_id"]:
             cfg["data_center_id"] = pod_up.network_volume_dc(self.account_key, cfg["network_volume_id"])
 
-        ranked = pod_up.rank_gpus(self.account_key, DEFAULT_MIN_VRAM, DEFAULT_MAX_PRICE, "")
+        ranked = pod_up.rank_gpus(self.account_key, DEFAULT_MIN_VRAM, DEFAULT_MAX_PRICE, DEFAULT_GPU_MATCH)
         if not ranked:
             raise RuntimeError("no_gpu_available")
 

@@ -8,7 +8,6 @@
 рендерит видео с синхронизацией губ и сам себя завершает.
 
 Полное обоснование дизайна: [`docs/2026-08-13-witch-avatar-video-design.md`](docs/2026-08-13-witch-avatar-video-design.md).
-Журнал эмпирических находок/решений: [`docs/decisions.md`](docs/decisions.md).
 
 ## Как это работает
 
@@ -66,8 +65,7 @@ object is not callable` изнутри Chatterbox, выполните:
 
 (pip выведет предупреждение резолвера о том, что `torch` хочет более
 новый `setuptools` — это просто предупреждение, не реальный конфликт;
-torch работает нормально.) Смотрите `docs/decisions.md` / память проекта
-за полной историей, если это продолжает повторяться.
+torch работает нормально.)
 
 ### 2. Получение API-ключа RunPod и SSH-пары ключей
 
@@ -345,4 +343,3 @@ gh api -X PUT repos/<owner>/<repo>/actions/permissions/workflow \
 | `webui/frontend/` | Статическая страница, которую отдаёт `webui/backend` |
 | `tests/` | Набор тестов pytest (`./.venv/bin/python -m pytest tests/`) |
 | `docs/2026-08-13-witch-avatar-video-design.md` | Изначальная проектная спецификация |
-| `docs/decisions.md` | Журнал эмпирических находок, пополняется по мере обнаружения |

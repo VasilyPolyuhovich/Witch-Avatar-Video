@@ -249,6 +249,32 @@ The page supports English and Ukrainian (switch in the header).
   independent scene animation). To use a different background, edit the
   source photo before generating, not after.
 
+## Post-processing (background swaps, splicing)
+
+This project only renders the ~5-15s talking-head clip itself — no
+background compositing, cuts, transitions, or joining multiple clips
+into one video. For that, free tools work well on the finished MP4:
+
+- **[CapCut](https://www.capcut.com/)** (desktop/mobile/web, free) — the
+  single best option for both jobs: AI background removal/replacement
+  ("Auto cutout") to swap the background *after* rendering, plus a full
+  timeline editor for splicing several clips, trimming, transitions,
+  and text overlays for Instagram. No account needed for a basic export.
+- **[DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve)**
+  (desktop, free, no watermark) — more capable but a steeper learning
+  curve; its Magic Mask tool does rotoscoped background removal, and the
+  full Edit/Fusion pages handle splicing and compositing professionally.
+- **iMovie** (free, built into every Mac) — simplest option if you're
+  already on macOS and just need to trim, join a few clips, and add a
+  title or background music; no background-removal feature.
+- **[Canva](https://www.canva.com/)** (web, free tier) — easiest for
+  someone who's never edited video before: a drag-and-drop background
+  remover and a basic timeline for splicing, all in the browser.
+
+For a quick one-off background swap, CapCut's or Canva's browser-based
+background remover alone is usually enough — export the result, then
+splice/trim in whichever tool you're already comfortable with.
+
 ## Troubleshooting
 
 ### "supply refused" for every GPU candidate

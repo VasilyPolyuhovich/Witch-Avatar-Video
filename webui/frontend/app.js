@@ -55,7 +55,7 @@ function render() {
   document.getElementById("start-btn").disabled = currentState !== State.NOT_STARTED;
   document.getElementById("stop-btn").disabled = currentState === State.NOT_STARTED;
   document.getElementById("generate-form").style.display =
-    (currentState === State.READY || currentState === State.GENERATING) ? "block" : "none";
+    (currentState === State.READY || currentState === State.GENERATING) ? "flex" : "none";
   document.getElementById("generate-btn").disabled = currentState !== State.READY;
 }
 

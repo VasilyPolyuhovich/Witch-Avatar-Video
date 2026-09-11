@@ -185,6 +185,10 @@ ACCOUNT_KEY_FILE=~/.runpod-key-witch-video \
 Страница поддерживает английский и украинский языки (переключение в
 шапке).
 
+![WebUI: состояние покоя перед запуском пода](docs/screenshots/webui-initial-en.jpg)
+
+![WebUI: форма генерации (фото, текст, опциональный образец голоса)](docs/screenshots/webui-generate-form-en.jpg)
+
 ## Стоимость
 
 - **Время рендера на GPU:** ~$0.05-0.10 за видео на самой дешёвой

@@ -9,10 +9,9 @@ if [ -n "${PUBLIC_KEY:-}" ]; then
 fi
 /usr/sbin/sshd
 
-# Batch-job container: no HTTP server. Keep PID 1 alive over SSH and run
-# scripts/run_sadtalker.sh manually or via scripts/generate_witch_video.py
-# (which uploads that script fresh per job -- see its docstring for why),
-# or pass a command to run non-interactively.
+# Batch-job container: no HTTP server. Run scripts/run_echomimicv3.sh
+# manually or via scripts/generate_witch_video.py (which uploads it fresh
+# per job -- same reasoning as docker/musetalk/entrypoint.sh, now deleted).
 if [ "$#" -eq 0 ]; then
   exec sleep infinity
 else

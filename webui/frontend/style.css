@@ -1,0 +1,7 @@
+body { font-family: system-ui, sans-serif; max-width: 480px; margin: 2rem auto; padding: 0 1rem; }
+header { display: flex; justify-content: space-between; align-items: center; }
+.lang-switch button { margin-left: 0.25rem; }
+#session-controls { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+#generate-form { display: flex; flex-direction: column; gap: 0.5rem; }
+#warning-banner { background: #fff3cd; padding: 0.5rem; margin-top: 1rem; border-radius: 4px; }
+#result-video { width: 100%; margin-top: 1rem; }

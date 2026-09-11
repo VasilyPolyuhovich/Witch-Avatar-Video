@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """On-demand witch avatar video generation: text -> local Chatterbox
-Multilingual V3 TTS -> deploy a fresh MuseTalk pod -> render -> download
+Multilingual V3 TTS -> deploy a fresh EchoMimicV3 pod -> render -> download
 -> terminate, always, in one call. See
 docs/2026-08-13-witch-avatar-video-design.md for the full design.
 
@@ -281,7 +281,7 @@ def generate_witch_video(
     gpu_match=pod_up.DEFAULT_GPU_MATCH, run_timeout_s=DEFAULT_RUN_TIMEOUT_S,
     start_timeout=600, dry_run=False, tts_only=False,
 ):
-    """Deploy a fresh MuseTalk pod, render image+audio into a video,
+    """Deploy a fresh EchoMimicV3 pod, render image+audio into a video,
     retrieve it, and terminate the pod -- always, even on error/Ctrl-C.
     Returns a GenerationResult, or None if dry_run=True."""
     t0 = time.monotonic()
@@ -402,7 +402,7 @@ def generate_witch_video(
 
 def _cli():
     p = argparse.ArgumentParser(
-        description="Generate a witch avatar video via an on-demand RunPod MuseTalk pod.")
+        description="Generate a witch avatar video via an on-demand RunPod EchoMimicV3 pod.")
     p.add_argument("--image", required=True)
     p.add_argument("--text", required=True)
     p.add_argument("--voice-sample",
@@ -417,7 +417,7 @@ def _cli():
     p.add_argument("--min-vram", type=float, default=pod_up.DEFAULT_MIN_VRAM)
     p.add_argument("--gpu-match", default=pod_up.DEFAULT_GPU_MATCH)
     p.add_argument("--timeout", type=int, default=DEFAULT_RUN_TIMEOUT_S,
-                    help="Hard timeout in seconds for the remote render step (default: 600).")
+                    help="Hard timeout in seconds for the remote render step (default: 900).")
     p.add_argument("--dry-run", action="store_true",
                     help="Rank GPUs and print the command that would run -- no deploy, no TTS call, no spend")
     p.add_argument("--tts-only", action="store_true",

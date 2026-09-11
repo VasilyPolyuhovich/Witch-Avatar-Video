@@ -1,8 +1,3 @@
-if (!sessionStorage.getItem("webui_password")) {
-  const entered = prompt("Password:");
-  if (entered) sessionStorage.setItem("webui_password", entered);
-}
-
 const POLL_INTERVAL_MS = 3000;
 const LONG_SESSION_WARNING_S = 30 * 60; // 30 minutes
 
@@ -16,16 +11,12 @@ const State = {
 let currentState = State.NOT_STARTED;
 let pollTimer = null;
 
-function apiHeaders() {
-  return { "X-WebUI-Password": sessionStorage.getItem("webui_password") || "" };
-}
-
 async function apiPost(path, options = {}) {
-  return fetch(path, { method: "POST", headers: apiHeaders(), ...options });
+  return fetch(path, { method: "POST", ...options });
 }
 
 async function apiGet(path) {
-  return fetch(path, { headers: apiHeaders() });
+  return fetch(path);
 }
 
 function formatElapsed(seconds) {
@@ -109,11 +100,27 @@ function stopPolling() {
 async function onStart() {
   currentState = State.CONNECTING;
   render();
-  const resp = await apiPost("/api/start");
-  if (!resp.ok) {
+  let resp;
+  try {
+    resp = await apiPost("/api/start");
+  } catch (err) {
+    console.error("Start request failed:", err);
     currentState = State.NOT_STARTED;
     render();
-    alert(t("startFailed"));
+    alert(`${t("startFailed")}\n\n${err}`);
+    return;
+  }
+  if (!resp.ok) {
+    let detail = resp.statusText;
+    try {
+      detail = (await resp.json()).detail || detail;
+    } catch (_) {
+      // response body wasn't JSON -- fall back to statusText
+    }
+    console.error(`Start failed (HTTP ${resp.status}):`, detail);
+    currentState = State.NOT_STARTED;
+    render();
+    alert(`${t("startFailed")}\n\n${detail}`);
     return;
   }
   startPolling();

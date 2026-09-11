@@ -19,15 +19,16 @@ Empirical findings/decisions log: [`docs/decisions.md`](docs/decisions.md).
    ./start_webui.sh
    ```
    The first run installs everything it needs (a few minutes), asks you to
-   paste the RunPod API key once, generates a login password for the page,
-   and opens `http://localhost:8080` in your browser automatically.
-4. In the page: click **Start** (deploys a GPU pod, ~1-2 min), upload a
+   paste the RunPod API key once, and opens `http://localhost:8080` in
+   your browser automatically. A full log is also kept at
+   `~/.witch-avatar-webui.log` if anything goes wrong.
+4. In the page, click **Start** (deploys a GPU pod, ~1-2 min), upload a
    photo and type the text, click **Generate**, download the video, click
    **Stop** when done.
 
 Requires Python 3.10+ already installed (macOS/Linux ship with `python3`).
 Every subsequent run is just `./start_webui.sh` again — it remembers your
-API key and won't ask again.
+RunPod API key.
 
 ## How it works
 
@@ -45,8 +46,8 @@ API key and won't ask again.
    underlying pod images:
    - `scripts/generate_witch_video.py` — a CLI script, run it and get a
      `.mp4` back.
-   - The **WebUI** (`webui/`) — a small password-gated local web page
-     (type text, upload a photo, click Generate) for non-technical use.
+   - The **WebUI** (`webui/`) — a small local web page (type text, upload
+     a photo, click Generate) for non-technical use.
 
 ## Prerequisites
 
@@ -170,17 +171,18 @@ a pod after a CLI run.
 
 ### WebUI
 
-Start the local backend (this runs on your own machine, not on RunPod —
-it's what *drives* the RunPod pod on your behalf):
+The easiest way is [`./start_webui.sh`](#quickstart-no-technical-setup-needed)
+(see Quickstart above). To start it manually instead (this runs on your
+own machine, not on RunPod — it's what *drives* the RunPod pod on your
+behalf):
 
 ```bash
-WEBUI_PASSWORD=<pick-a-password> \
 WEBUI_BACKEND_IMAGE=ghcr.io/vasilypolyuhovich/witch-avatar-echomimicv3-webui:latest \
 ACCOUNT_KEY_FILE=~/.runpod-key-witch-video \
 .venv/bin/uvicorn webui.backend.app:app --port 8080
 ```
 
-Then open `http://localhost:8080`, enter the password, and:
+Then open `http://localhost:8080` and:
 
 1. Click **Start** — deploys a pod (takes ~1-2 minutes to become Ready).
 2. Upload a photo, type the text, optionally attach a short voice-clone

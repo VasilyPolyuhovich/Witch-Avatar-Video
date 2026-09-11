@@ -33,23 +33,29 @@ if [ ! -f "${SSH_KEY}.pub" ]; then
   ssh-keygen -t ed25519 -f "$SSH_KEY" -N "" -q
 fi
 
-if [ -z "${WEBUI_PASSWORD:-}" ]; then
-  WEBUI_PASSWORD="$(.venv/bin/python3 -c 'import secrets; print(secrets.token_urlsafe(9))')"
-  echo ""
-  echo "Generated a WebUI password -- you'll need to type it in the browser:"
-  echo "  $WEBUI_PASSWORD"
-fi
-
-export WEBUI_PASSWORD
 export WEBUI_BACKEND_IMAGE="${WEBUI_BACKEND_IMAGE:-ghcr.io/vasilypolyuhovich/witch-avatar-echomimicv3-webui:latest}"
 export ACCOUNT_KEY_FILE="$KEY_FILE"
 export SSH_PUBKEY_FILE="${SSH_KEY}.pub"
 
+LOG_FILE="$HOME/.witch-avatar-webui.log"
 echo ""
-echo "Starting WebUI at http://localhost:8080 (password above) ..."
-echo "Press Ctrl-C to stop."
+echo "Starting WebUI at http://localhost:8080 ..."
+echo "Press Ctrl-C to stop. Full log also saved to $LOG_FILE"
 echo ""
 
 ( sleep 2; command -v open >/dev/null 2>&1 && open "http://localhost:8080" || true ) &
 
-exec .venv/bin/uvicorn webui.backend.app:app --port 8080 --host 127.0.0.1
+# Not `exec` -- piping through tee (for a persistent log alongside the
+# terminal) needs this process to stay alive to read uvicorn's output.
+# `set +e` around the pipeline: under `pipefail` (set at the top of this
+# script) a non-zero uvicorn exit would otherwise trigger `set -e` and
+# exit immediately, before PIPESTATUS could be read below to report it.
+set +e
+.venv/bin/uvicorn webui.backend.app:app --port 8080 --host 127.0.0.1 2>&1 | tee -a "$LOG_FILE"
+rc=${PIPESTATUS[0]}
+set -e
+if [ "$rc" -ne 0 ]; then
+  echo ""
+  echo "*** WebUI backend exited with an error (code $rc). See $LOG_FILE for the full log. ***" >&2
+  exit "$rc"
+fi

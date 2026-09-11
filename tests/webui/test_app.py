@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setenv("WEBUI_PASSWORD", "test-password")
     monkeypatch.setenv("WEBUI_BACKEND_IMAGE", "fake/image:latest")
     monkeypatch.setenv("ACCOUNT_KEY_FILE", str(Path(__file__).resolve().parent / "fake_key.txt"))
     Path(__file__).resolve().parent.joinpath("fake_key.txt").write_text("fake-runpod-key")
@@ -21,18 +20,10 @@ def client(monkeypatch):
     return TestClient(app_module.app)
 
 
-AUTH_HEADERS = {"X-WebUI-Password": "test-password"}
-
-
-def test_start_requires_correct_password(client):
-    resp = client.post("/api/start", headers={"X-WebUI-Password": "wrong"})
-    assert resp.status_code == 401
-
-
 def test_start_calls_session_start_and_returns_pod_id(client):
     from webui.backend import app as app_module
     with patch.object(app_module.session, "start", return_value="pod-123") as mock_start:
-        resp = client.post("/api/start", headers=AUTH_HEADERS)
+        resp = client.post("/api/start")
     assert resp.status_code == 200
     assert resp.json() == {"pod_id": "pod-123"}
     mock_start.assert_called_once()
@@ -41,7 +32,7 @@ def test_start_calls_session_start_and_returns_pod_id(client):
 def test_start_returns_503_when_no_gpu_available(client):
     from webui.backend import app as app_module
     with patch.object(app_module.session, "start", side_effect=RuntimeError("no_gpu_available")):
-        resp = client.post("/api/start", headers=AUTH_HEADERS)
+        resp = client.post("/api/start")
     assert resp.status_code == 503
     assert resp.json()["detail"] == "no_gpu_available"
 
@@ -49,7 +40,7 @@ def test_start_returns_503_when_no_gpu_available(client):
 def test_stop_calls_session_stop(client):
     from webui.backend import app as app_module
     with patch.object(app_module.session, "stop") as mock_stop:
-        resp = client.post("/api/stop", headers=AUTH_HEADERS)
+        resp = client.post("/api/stop")
     assert resp.status_code == 200
     mock_stop.assert_called_once()
 
@@ -57,7 +48,7 @@ def test_stop_calls_session_stop(client):
 def test_status_reports_inactive_when_no_pod(client):
     from webui.backend import app as app_module
     app_module.session.pod_id = None
-    resp = client.get("/api/status", headers=AUTH_HEADERS)
+    resp = client.get("/api/status")
     assert resp.status_code == 200
     body = resp.json()
     assert body["active"] is False
@@ -69,7 +60,7 @@ def test_status_polls_health_when_pod_active(client):
     app_module.session.pod_id = "pod-123"
     with patch.object(app_module.session, "poll_health", return_value=True), \
          patch.object(app_module.session, "elapsed_seconds", return_value=42.0):
-        resp = client.get("/api/status", headers=AUTH_HEADERS)
+        resp = client.get("/api/status")
     body = resp.json()
     assert body == {"active": True, "ready": True, "elapsed_seconds": 42.0}
     app_module.session.pod_id = None
@@ -79,7 +70,7 @@ def test_generate_returns_409_when_not_ready(client):
     from webui.backend import app as app_module
     app_module.session.base_url = None
     resp = client.post(
-        "/api/generate", headers=AUTH_HEADERS,
+        "/api/generate",
         data={"text": "hello"}, files={"image": ("photo.jpg", b"fake", "image/jpeg")})
     assert resp.status_code == 409
 
@@ -94,7 +85,7 @@ def test_generate_forwards_to_session_when_ready(client):
     with patch.object(app_module.generate_witch_video, "text_to_speech", side_effect=_fake_tts), \
          patch.object(app_module.session, "generate", return_value="job-1") as mock_generate:
         resp = client.post(
-            "/api/generate", headers=AUTH_HEADERS,
+            "/api/generate",
             data={"text": "hello"}, files={"image": ("photo.jpg", b"fake", "image/jpeg")})
     assert resp.status_code == 200
     assert resp.json() == {"job_id": "job-1"}
@@ -117,7 +108,7 @@ def test_generate_ignores_path_traversal_in_voice_filename(client):
     with patch.object(app_module.generate_witch_video, "text_to_speech", side_effect=fake_tts), \
          patch.object(app_module.session, "generate", return_value="job-1"):
         resp = client.post(
-            "/api/generate", headers=AUTH_HEADERS,
+            "/api/generate",
             data={"text": "hello"},
             files={"image": ("photo.jpg", b"fake-image", "image/jpeg"),
                    "voice": ("../../etc/cron.d/evil.wav", b"fake-voice", "audio/wav")})
@@ -141,7 +132,7 @@ def test_generate_synthesizes_speech_locally_instead_of_forwarding_raw_upload(cl
     with patch.object(app_module.generate_witch_video, "text_to_speech", side_effect=_fake_tts) as mock_tts, \
          patch.object(app_module.session, "generate", return_value="job-1") as mock_generate:
         resp = client.post(
-            "/api/generate", headers=AUTH_HEADERS,
+            "/api/generate",
             data={"text": "Привіт, світе"},
             files={"image": ("photo.jpg", b"fake-image", "image/jpeg"),
                    "voice": ("clone-sample.wav", b"raw-clone-sample-bytes", "audio/wav")})

@@ -50,8 +50,14 @@ STOCK_RANK = {"High": 0, "Medium": 1, "Low": 2}
 # a safety margin, not a measured minimum -- see this project's
 # 2026-09-09 migration plan, Task 6.
 DEFAULT_MIN_VRAM = 40.0
-DEFAULT_MAX_PRICE = 0.60
-DEFAULT_GPU_MATCH = ""  # deliberately unrestricted -- no per-arch build constraint
+# Raised from 0.60 2026-09-11: a full render (TTS + inference) finishes
+# in ~10-15 min and the pod terminates immediately after, so even a
+# $2-3/hr card only costs $0.30-0.75 per video -- worth it for the much
+# wider GPU pool it unlocks (cheap 48GB cards flicker in and out of real
+# stock in minutes; paying more reaches types that are actually available
+# right now instead of failing every deploy attempt).
+DEFAULT_MAX_PRICE = 3.00
+DEFAULT_GPU_MATCH = "^(?!AMD)"  # exclude AMD/ROCm -- our image is built on CUDA (cu124), not ROCm
 DEFAULT_CONTAINER_DISK_GB = 30
 DEFAULT_VOLUME_GB = 10  # small pod volume, unused for anything but required by the deploy API
 # Points at EchoMimicV3-Flash, not MuseTalk, as of the 2026-09-09

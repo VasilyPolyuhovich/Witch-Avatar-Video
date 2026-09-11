@@ -10,6 +10,25 @@ on-demand GPU pod renders the lip-synced video and self-terminates.
 Full design rationale: [`docs/2026-08-13-witch-avatar-video-design.md`](docs/2026-08-13-witch-avatar-video-design.md).
 Empirical findings/decisions log: [`docs/decisions.md`](docs/decisions.md).
 
+## Quickstart (no technical setup needed)
+
+1. Clone this repository and open a terminal in it.
+2. Get a RunPod API key: [runpod.io/console/user/settings](https://www.runpod.io/console/user/settings) → API Keys → create one, copy it.
+3. Run:
+   ```bash
+   ./start_webui.sh
+   ```
+   The first run installs everything it needs (a few minutes), asks you to
+   paste the RunPod API key once, generates a login password for the page,
+   and opens `http://localhost:8080` in your browser automatically.
+4. In the page: click **Start** (deploys a GPU pod, ~1-2 min), upload a
+   photo and type the text, click **Generate**, download the video, click
+   **Stop** when done.
+
+Requires Python 3.10+ already installed (macOS/Linux ship with `python3`).
+Every subsequent run is just `./start_webui.sh` again — it remembers your
+API key and won't ask again.
+
 ## How it works
 
 1. **Text-to-speech runs locally**, on your own machine — [Chatterbox

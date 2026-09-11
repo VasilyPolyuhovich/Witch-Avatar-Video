@@ -159,17 +159,17 @@ Chatterbox, виконайте:
 
 ### WebUI
 
-Запустіть локальний бекенд (він працює на вашій власній машині, не на
-RunPod — саме він *керує* подом RunPod від вашого імені):
+Найпростіше — запустити `./start_webui.sh` (див. англійський README,
+розділ Quickstart). Щоб запустити вручну (він працює на вашій власній
+машині, не на RunPod — саме він *керує* подом RunPod від вашого імені):
 
 ```bash
-WEBUI_PASSWORD=<придумайте-пароль> \
 WEBUI_BACKEND_IMAGE=ghcr.io/vasilypolyuhovich/witch-avatar-echomimicv3-webui:latest \
 ACCOUNT_KEY_FILE=~/.runpod-key-witch-video \
 .venv/bin/uvicorn webui.backend.app:app --port 8080
 ```
 
-Потім відкрийте `http://localhost:8080`, введіть пароль і:
+Потім відкрийте `http://localhost:8080` і:
 
 1. Натисніть **Start** — розгортається под (займає ~1-2 хвилини до
    готовності).

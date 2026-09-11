@@ -69,7 +69,12 @@ class RunPodSession:
 
         ranked = pod_up.rank_gpus(self.account_key, DEFAULT_MIN_VRAM, DEFAULT_MAX_PRICE, DEFAULT_GPU_MATCH)
         if not ranked:
-            raise RuntimeError("no_gpu_available")
+            raise RuntimeError(
+                f"no_gpu_available: no in-stock Secure GPU with >={DEFAULT_MIN_VRAM:g}GB "
+                f"VRAM under ${DEFAULT_MAX_PRICE:g}/hr matching /{DEFAULT_GPU_MATCH}/ "
+                "right now. RunPod GPU stock changes minute-to-minute -- wait a bit "
+                "and click Start again."
+            )
 
         public_key = pod_up.load_public_key()
         pod_id, _machine, _gpu_id, _gpu_price = pod_up.deploy_with_fallback(

@@ -1,5 +1,5 @@
 """Local WebUI backend: serves the static frontend and exposes a small
-password-gated API that drives a RunPodSession. See
+API that drives a RunPodSession. See
 docs/superpowers/specs/2026-08-30-webui-design.md.
 
 The 'voice' upload in /api/generate is a voice-CLONING reference sample
@@ -12,11 +12,12 @@ forwards the *synthesized* audio to the pod, not the raw uploaded clip.
 Fixed 2026-09-10 after this was found to be a blind pass-through instead
 -- see docs/superpowers/plans/2026-09-09-echomimicv3-migration-implementation.md,
 Task 9b."""
+import logging
 import sys
 import tempfile
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
@@ -28,36 +29,33 @@ SCRIPT_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 import generate_witch_video  # noqa: E402
 
+logger = logging.getLogger("witch_avatar_webui")
+
 app = FastAPI()
 
-_password = config.load_webui_password()
 _account_key = config.load_runpod_account_key()
 _image_ref = config.load_backend_image_ref()
 session = RunPodSession(account_key=_account_key, image_ref=_image_ref)
 
 
-def require_password(x_webui_password: str = Header(default="")):
-    if x_webui_password != _password:
-        raise HTTPException(status_code=401, detail="invalid_password")
-
-
 @app.post("/api/start")
-def api_start(_: None = Depends(require_password)):
+def api_start():
     try:
         pod_id = session.start()
     except RuntimeError as e:
+        logger.error("Pod start failed: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
     return {"pod_id": pod_id}
 
 
 @app.post("/api/stop")
-def api_stop(_: None = Depends(require_password)):
+def api_stop():
     session.stop()
     return {"ok": True}
 
 
 @app.get("/api/status")
-def api_status(_: None = Depends(require_password)):
+def api_status():
     active = session.pod_id is not None
     ready = session.poll_health() if active else False
     return {
@@ -72,7 +70,6 @@ async def api_generate(
     text: str = Form(...),
     image: UploadFile = File(...),
     voice: UploadFile = File(None),
-    _: None = Depends(require_password),
 ):
     if not session.base_url:
         raise HTTPException(status_code=409, detail="not_ready")
@@ -100,12 +97,12 @@ async def api_generate(
 
 
 @app.get("/api/generate/{job_id}/status")
-def api_generate_status(job_id: str, _: None = Depends(require_password)):
+def api_generate_status(job_id: str):
     return session.get_status(job_id)
 
 
 @app.get("/api/generate/{job_id}/result")
-def api_generate_result(job_id: str, _: None = Depends(require_password)):
+def api_generate_result(job_id: str):
     content = session.get_result(job_id)
     return Response(content=content, media_type="video/mp4")
 

@@ -8,17 +8,6 @@ sys.path.insert(0, str(WEBUI_DIR.parent))
 from webui.backend import config  # noqa: E402
 
 
-def test_load_webui_password_reads_env_var(monkeypatch):
-    monkeypatch.setenv("WEBUI_PASSWORD", "correct-horse-battery-staple")
-    assert config.load_webui_password() == "correct-horse-battery-staple"
-
-
-def test_load_webui_password_raises_when_unset(monkeypatch):
-    monkeypatch.delenv("WEBUI_PASSWORD", raising=False)
-    with pytest.raises(RuntimeError, match="WEBUI_PASSWORD"):
-        config.load_webui_password()
-
-
 def test_load_backend_image_ref_reads_env_var(monkeypatch):
     monkeypatch.setenv("WEBUI_BACKEND_IMAGE", "ghcr.io/example/some-image:latest")
     assert config.load_backend_image_ref() == "ghcr.io/example/some-image:latest"

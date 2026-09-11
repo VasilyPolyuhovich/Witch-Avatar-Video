@@ -1,9 +1,14 @@
-"""Configuration for the local WebUI: the unlock password and RunPod
-credentials it needs to manage a pod's lifecycle. See
-docs/superpowers/specs/2026-08-30-webui-design.md -- the RunPod account
-key is loaded via pod_up.load_account_key() (a file path, scoped/capped
-key recommended per the spec), kept separate from WEBUI_PASSWORD, which
-is a local app-unlock secret, not a RunPod credential."""
+"""Configuration for the local WebUI: the RunPod credentials it needs to
+manage a pod's lifecycle. See docs/superpowers/specs/2026-08-30-webui-design.md
+-- the RunPod account key is loaded via pod_up.load_account_key() (a file
+path, scoped/capped key recommended per the spec).
+
+Originally also gated the UI behind a WEBUI_PASSWORD unlock secret (for a
+"distribute an installed copy with an embedded key to a client" scenario).
+Removed 2026-09-11: the actual usage is a single operator running this on
+their own machine via start_webui.sh, bound to 127.0.0.1, with a RunPod
+key they provide themselves -- a login prompt guarded nothing real there
+and just added friction."""
 import os
 import sys
 from pathlib import Path
@@ -11,13 +16,6 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 import pod_up  # noqa: E402
-
-
-def load_webui_password():
-    password = os.environ.get("WEBUI_PASSWORD")
-    if not password:
-        raise RuntimeError("WEBUI_PASSWORD environment variable is not set")
-    return password
 
 
 def load_backend_image_ref():

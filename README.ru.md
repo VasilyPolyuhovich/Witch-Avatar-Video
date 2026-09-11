@@ -157,17 +157,18 @@ torch работает нормально.) Смотрите `docs/decisions.md`
 
 ### WebUI
 
-Запустите локальный бэкенд (он работает на вашей собственной машине, не
-на RunPod — именно он *управляет* подом RunPod от вашего имени):
+Проще всего запустить `./start_webui.sh` (см. английский README, раздел
+Quickstart). Чтобы запустить вручную (он работает на вашей собственной
+машине, не на RunPod — именно он *управляет* подом RunPod от вашего
+имени):
 
 ```bash
-WEBUI_PASSWORD=<придумайте-пароль> \
 WEBUI_BACKEND_IMAGE=ghcr.io/vasilypolyuhovich/witch-avatar-echomimicv3-webui:latest \
 ACCOUNT_KEY_FILE=~/.runpod-key-witch-video \
 .venv/bin/uvicorn webui.backend.app:app --port 8080
 ```
 
-Затем откройте `http://localhost:8080`, введите пароль и:
+Затем откройте `http://localhost:8080` и:
 
 1. Нажмите **Start** — разворачивается под (занимает ~1-2 минуты до
    готовности).

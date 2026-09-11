@@ -1,5 +1,7 @@
 # Witch Avatar Video
 
+*Readme also available in: [Русский](README.ru.md) | [Українська](README.uk.md)*
+
 Generates short (5-15s) talking-head video flyers of a fictional witch/
 fortune-teller ("гадалка") character for Instagram, from a reference photo
 and a line of Russian-language text: local text-to-speech, then an

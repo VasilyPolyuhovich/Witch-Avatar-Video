@@ -85,9 +85,13 @@ baked into the pod image — a volume, once populated, is reused by every
 future render without re-downloading anything.
 
 1. Create a 30GB network volume via the RunPod console (Storage → Network
-   Volumes), in whichever datacenter has good stock for 40GB+ GPUs (see
-   [Known limitations](#known-limitations) on why 40GB+ is required).
-   Note its id.
+   Volumes), in a datacenter with real (not just globally-listed) stock
+   for 40GB+ GPUs — see [Troubleshooting](#troubleshooting) for how to
+   check actual per-datacenter stock before picking one, since the
+   default GPU-ranking display is a global aggregate that can be
+   misleading for a volume-pinned deploy. Note the volume's id. Give a
+   newly-created volume a few minutes before trusting any deploy
+   failures against it as "no stock" — see Troubleshooting.
 2. Deploy a cheap temporary pod with that volume attached at `/workspace`
    (any small GPU is fine — this step doesn't need real compute, just
    the volume mounted):
@@ -200,11 +204,12 @@ The page supports English and Ukrainian (switch in the header).
   for the migration plan's Task 11 notes).
 - **GPU availability can be patchy in the network volume's datacenter.**
   A network volume pins every deploy to one specific RunPod datacenter
-  (volumes aren't portable between datacenters). If deploys start failing
-  with "supply refused" for every GPU candidate, that specific
-  datacenter may be temporarily out of stock for your VRAM tier — retry
-  in a few minutes, or raise `--max-price` to reach a pricier card that's
-  still in that DC.
+  (volumes aren't portable between datacenters), and the stock levels
+  `pod_up.py --dry-run` prints are a **global** aggregate across every
+  datacenter, not specific to the one your volume lives in — a GPU can
+  show "Medium" stock overall while genuinely having zero capacity in
+  your pinned DC. See [Troubleshooting](#troubleshooting) below for how
+  to check real per-datacenter stock and what to do about it.
 - **Chatterbox's Russian stress-marking (наголоси) is not enabled.** The
   underlying package (`russian_text_stresser`) is unmaintained and known
   to have installation issues on modern Python; TTS output has correct
@@ -218,6 +223,83 @@ The page supports English and Ukrainian (switch in the header).
   secondary motion near the subject — candle flicker, fabric — but not
   independent scene animation). To use a different background, edit the
   source photo before generating, not after.
+
+## Troubleshooting
+
+### "supply refused" for every GPU candidate
+
+`pod_up.py`'s `--dry-run` listing shows *global* stock across all RunPod
+datacenters, but a network-volume deploy is pinned to one specific
+datacenter (the volume's own). The listing can show "Medium" stock for a
+GPU that has genuinely zero capacity in your particular datacenter right
+now. To check the real, per-datacenter number before assuming a bug:
+
+```bash
+python3 -c "
+import json, urllib.request
+key = open('~/.runpod-key-witch-video').read().strip()
+# real per-DC stock, not the global aggregate pod_up.py's --dry-run shows
+req = urllib.request.Request('https://api.runpod.io/graphql',
+  data=json.dumps({'query': '''query{gpuTypes{id lowestPrice(input:{gpuCount:1,secureCloud:true,dataCenterId:\"EU-RO-1\"}){stockStatus}}}'''}).encode(),
+  headers={'Authorization': f'Bearer {key}', 'Content-Type':'application/json', 'User-Agent':'x'})
+print(json.load(urllib.request.urlopen(req)))
+"
+```
+(replace `EU-RO-1` with your volume's datacenter). `stockStatus: null`
+for a GPU means genuinely zero capacity there right now, regardless of
+what the global listing says. This can and does happen — it's not
+specific to any one datacenter. Retry after a few minutes, or raise
+`--max-price` to reach a pricier card that might still have room.
+
+### A **brand-new** network volume fails every deploy, even for cheap GPUs
+
+Observed directly (2026-09-11): a network volume that's hours/days old
+deploys normally, but a volume created moments ago can fail 100% of
+deploy attempts across every GPU type and every datacenter tried,
+despite those same GPU types deploying fine elsewhere. This looks like a
+provisioning/propagation delay on RunPod's backend for freshly-created
+volumes, not a real capacity problem — the workaround is simply to wait
+(tested insufficient at 90s; try several minutes) before trusting a new
+volume's deploy failures as "no stock." If you're setting up the network
+volume for the first time, don't panic if the very first deploy attempt
+against it fails — retry after a longer pause before concluding anything
+is broken.
+
+### Docker push to GHCR hangs or drops mid-transfer locally
+
+If `docker push` against `ghcr.io` repeatedly fails with `broken pipe` or
+`use of closed network connection` from your own machine, this is most
+often local network/Docker Desktop VM instability, not a GHCR problem —
+confirmed by the exact same push succeeding immediately from GitHub
+Actions instead. Rather than fighting a flaky local connection, trigger
+the CI build instead (it rebuilds and pushes on its own infrastructure):
+
+```bash
+gh workflow run docker-build-echomimicv3.yml --ref <your-branch>
+gh workflow run docker-build-echomimicv3-webui.yml --ref <your-branch>
+```
+
+(`workflow_dispatch` requires the workflow YAML file to already exist on
+the repo's **default** branch to be dispatchable at all — if you get a
+"workflow not found" 404, the file needs merging there first, even if
+you want to build from a different branch's Dockerfile via `--ref`.)
+
+If CI itself fails with `permission_denied: write_package`, the repo's
+Settings → Actions → General → Workflow permissions is probably set to
+"Read repository contents permission" only — fix with:
+```bash
+gh api -X PUT repos/<owner>/<repo>/actions/permissions/workflow \
+  -f default_workflow_permissions=write -F can_approve_pull_request_reviews=false
+```
+If it instead fails with `permission_denied: read_package` on a retry
+right after that fix, the previous failed run likely left the GHCR
+package in a broken half-state — delete it entirely
+(`gh api -X DELETE /user/packages/container/<name>`) and let CI recreate
+it cleanly on the next run. Verify any "successful" push actually
+produced a real, pullable image with
+`docker manifest inspect ghcr.io/<owner>/<image>:latest` — a CI run
+reporting success and a package existing in GHCR's package listing have
+both been observed to lie about this independently.
 
 ## Repository layout
 

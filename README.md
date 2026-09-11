@@ -176,6 +176,10 @@ Then open `http://localhost:8080`, enter the password, and:
 
 The page supports English and Ukrainian (switch in the header).
 
+![WebUI: idle state before starting a pod](docs/screenshots/webui-initial-en.jpg)
+
+![WebUI: generate form (photo, text, optional voice sample)](docs/screenshots/webui-generate-form-en.jpg)
+
 ## Cost
 
 - **GPU render time:** ~$0.05-0.10 per video on the cheapest available

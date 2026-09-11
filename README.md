@@ -8,7 +8,6 @@ and a line of Russian-language text: local text-to-speech, then an
 on-demand GPU pod renders the lip-synced video and self-terminates.
 
 Full design rationale: [`docs/2026-08-13-witch-avatar-video-design.md`](docs/2026-08-13-witch-avatar-video-design.md).
-Empirical findings/decisions log: [`docs/decisions.md`](docs/decisions.md).
 
 ## Quickstart (no technical setup needed)
 
@@ -83,8 +82,7 @@ python3 -m venv .venv
 
 (pip will print a resolver warning about `torch` wanting a newer
 `setuptools` — that's just a warning, not a real conflict; torch runs
-fine.) See `docs/decisions.md` / project memory for the full story if
-this keeps recurring.
+fine.)
 
 ### 2. Get a RunPod API key and SSH keypair
 
@@ -255,42 +253,67 @@ The page supports English and Ukrainian (switch in the header).
 
 ### "supply refused" for every GPU candidate
 
-`pod_up.py`'s `--dry-run` listing shows *global* stock across all RunPod
-datacenters, but a network-volume deploy is pinned to one specific
-datacenter (the volume's own). The listing can show "Medium" stock for a
-GPU that has genuinely zero capacity in your particular datacenter right
-now. To check the real, per-datacenter number before assuming a bug:
+`pod_up.py`'s `--dry-run` listing (and the WebUI's own ranking) queries
+*global* stock across all RunPod datacenters, but a network-volume
+deploy is pinned to one specific datacenter (the volume's own). The
+listing can show "Medium" stock for a GPU that has genuinely zero
+capacity in your particular datacenter right now — and even a GPU that
+*does* show real per-datacenter stock can still get "supply refused" on
+any single attempt (observed directly 2026-09-11: 14 consecutive
+attempts across 9 GPU types, including the one type genuinely listed as
+in-stock in that datacenter, all refused instantly). RunPod's own stock
+listings are a snapshot that can be stale by the time your deploy
+request lands — this isn't a bug in this project's code.
+
+To check real per-datacenter stock (and find a better one) instead of
+guessing from the global listing:
 
 ```bash
-python3 -c "
-import json, urllib.request
-key = open('~/.runpod-key-witch-video').read().strip()
-# real per-DC stock, not the global aggregate pod_up.py's --dry-run shows
-req = urllib.request.Request('https://api.runpod.io/graphql',
-  data=json.dumps({'query': '''query{gpuTypes{id lowestPrice(input:{gpuCount:1,secureCloud:true,dataCenterId:\"EU-RO-1\"}){stockStatus}}}'''}).encode(),
-  headers={'Authorization': f'Bearer {key}', 'Content-Type':'application/json', 'User-Agent':'x'})
-print(json.load(urllib.request.urlopen(req)))
-"
+python3 scripts/find_datacenter.py
 ```
-(replace `EU-RO-1` with your volume's datacenter). `stockStatus: null`
-for a GPU means genuinely zero capacity there right now, regardless of
-what the global listing says. This can and does happen — it's not
-specific to any one datacenter. Retry after a few minutes, or raise
-`--max-price` to reach a pricier card that might still have room.
 
-### A **brand-new** network volume fails every deploy, even for cheap GPUs
+This queries every network-volume-capable datacenter directly and
+prints what's actually available, cheapest first. If your current
+datacenter is dry, either wait and retry (stock changes minute to
+minute), raise `MAX_PRICE`, or move to a different datacenter — see
+below.
 
-Observed directly (2026-09-11): a network volume that's hours/days old
-deploys normally, but a volume created moments ago can fail 100% of
-deploy attempts across every GPU type and every datacenter tried,
-despite those same GPU types deploying fine elsewhere. This looks like a
-provisioning/propagation delay on RunPod's backend for freshly-created
-volumes, not a real capacity problem — the workaround is simply to wait
-(tested insufficient at 90s; try several minutes) before trusting a new
-volume's deploy failures as "no stock." If you're setting up the network
-volume for the first time, don't panic if the very first deploy attempt
-against it fails — retry after a longer pause before concluding anything
-is broken.
+### A network volume's first deploy attempt fails
+
+Don't conclude anything is broken from a single failed deploy against a
+brand-new (or existing) volume — per-attempt "supply refused" happens
+even against genuinely in-stock GPUs (see above). Retry a few times a
+short pause apart before treating it as "no stock in this datacenter."
+
+### Deploying in a different datacenter
+
+If your current network volume's datacenter has gone dry for a while,
+move to wherever `find_datacenter.py` shows real stock right now:
+
+```bash
+# 1. See what's actually available (cheapest first)
+python3 scripts/find_datacenter.py
+
+# 2. Create a volume in whichever datacenter looks good
+python3 scripts/find_datacenter.py --create-volume <DATACENTER_ID>
+# prints the new volume's id and next steps
+
+# 3. Populate it with model weights: deploy a temporary pod with
+#    NETWORK_VOLUME_ID=<new-volume-id> (any GPU, doesn't need to match
+#    the render-time floor -- this step is just a download), SSH in,
+#    and run scripts/populate_echomimicv3_volume.sh on it. See "Set up
+#    the network volume" above for the exact one-time steps.
+
+# 4. Point deploys at the new volume
+export NETWORK_VOLUME_ID=<new-volume-id>
+# (or edit DEFAULT_NETWORK_VOLUME_ID in scripts/pod_up.py once you've
+# confirmed it deploys reliably, so you don't have to set this every time)
+
+# 5. Once confirmed working, delete whichever volume you're not using
+#    anymore -- don't pay for idle storage on more than one
+python3 scripts/find_datacenter.py --list-volumes
+python3 scripts/find_datacenter.py --delete-volume <old-volume-id>
+```
 
 ### Docker push to GHCR hangs or drops mid-transfer locally
 
@@ -334,6 +357,8 @@ both been observed to lie about this independently.
 |---|---|
 | `scripts/generate_witch_video.py` | CLI entry point |
 | `scripts/pod_up.py` | RunPod GPU deploy/rank/terminate primitives, shared by both front doors |
+| `scripts/find_datacenter.py` | Finds real per-datacenter GPU stock and manages network volumes across datacenters (see [Troubleshooting](#deploying-in-a-different-datacenter)) |
+| `start_webui.sh` | One-command build+run for the WebUI (see [Quickstart](#quickstart-no-technical-setup-needed)) |
 | `scripts/run_echomimicv3.sh` | Runs on the pod for the CLI path; wraps EchoMimicV3's inference script |
 | `scripts/populate_echomimicv3_volume.sh` | One-time network-volume weight download (see [setup](#3-set-up-the-network-volume-one-time-24gb-of-model-weights)) |
 | `docker/echomimicv3/` | Pod image for the CLI path (SSH-only, no HTTP server) |
@@ -343,4 +368,3 @@ both been observed to lie about this independently.
 | `webui/frontend/` | The static page `webui/backend` serves |
 | `tests/` | pytest suite (`./.venv/bin/python -m pytest tests/`) |
 | `docs/2026-08-13-witch-avatar-video-design.md` | Original design spec |
-| `docs/decisions.md` | Empirical findings log, updated as things are discovered |
